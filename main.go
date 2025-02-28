@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	//"sort"
-	"strings"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"image/color"
+	"strings"
 )
 
 type CardCounter struct {
@@ -122,7 +122,8 @@ func (cc *CardCounter) display() string {
 	output.WriteString("3 4 5 6 7 8 9 T J Q K A 2\n")
 	output.WriteString("--------------------------\n")
 
-	// 数字不换行，保持一行，删除颜色标记
+	// 特殊处理的计数行
+	counts := make([]int, 13)
 	for l := 0; l < 13; l++ {
 		count := 0
 		for k := 0; k < 4; k++ {
@@ -130,10 +131,12 @@ func (cc *CardCounter) display() string {
 				count++
 			}
 		}
+		counts[l] = count
 		output.WriteString(fmt.Sprintf("%d ", count))
 	}
+	output.WriteString("\n")
 
-	output.WriteString("\n--------------------------\n")
+	output.WriteString("--------------------------\n")
 	output.WriteString("左: ")
 	for l := 0; l < 13; l++ {
 		a0, a1, a2 := 0, 0, 0
@@ -196,24 +199,94 @@ func (cc *CardCounter) initCards(zero string) {
 	}
 }
 
+// CustomTextSegment 是一个支持自定义颜色的 TextSegment
+type CustomTextSegment struct {
+	Text      string
+	Color     color.Color
+	Alignment fyne.TextAlign
+	TextStyle fyne.TextStyle
+	IsInline  bool
+}
+
+// Inline 根据 IsInline 字段决定是否内联
+func (c *CustomTextSegment) Inline() bool {
+	return c.IsInline
+}
+
+func (c *CustomTextSegment) Textual() string {
+	return c.Text
+}
+
+func (c *CustomTextSegment) Visual() fyne.CanvasObject {
+	obj := canvas.NewText(c.Text, c.Color)
+	obj.Alignment = c.Alignment
+	obj.TextStyle = c.TextStyle
+	return obj
+}
+
+func (c *CustomTextSegment) Update(o fyne.CanvasObject) {
+	obj := o.(*canvas.Text)
+	obj.Text = c.Text
+	obj.Color = c.Color
+	obj.Alignment = c.Alignment
+	obj.TextStyle = c.TextStyle
+	obj.Refresh()
+}
+
+// Select 未实现
+func (c *CustomTextSegment) Select(begin, end fyne.Position) {}
+
+// SelectedText 未实现
+func (c *CustomTextSegment) SelectedText() string {
+	return ""
+}
+
+// Unselect 未实现
+func (c *CustomTextSegment) Unselect() {}
+
 func (cc *CardCounter) updateOutput(text string) {
 	segments := []widget.RichTextSegment{}
-	current := ""
 
-	for _, r := range text {
-		current += string(r)
-	}
-	if current != "" {
-		segments = append(segments, &widget.TextSegment{
-			Text:  current,
-			Style: widget.RichTextStyle{},
-		})
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if line == "" {
+			continue
+		}
+		if i == 2 {
+			counts := strings.Fields(line)
+			for _, count := range counts {
+				seg := &CustomTextSegment{
+					Text:     count + " ",
+					IsInline: true,
+				}
+				switch count {
+				case "4":
+					seg.Color = color.RGBA{R: 255, G: 0, B: 0, A: 255} // 红
+				case "0":
+					seg.Color = color.RGBA{R: 0, G: 0, B: 255, A: 255} // 蓝
+				default:
+					seg.Color = color.Black
+				}
+				segments = append(segments, seg)
+			}
+
+			segments = append(segments, &CustomTextSegment{
+				Text:     "",
+				IsInline: false,
+			})
+		} else {
+
+			segments = append(segments, &CustomTextSegment{
+				Text:     line,
+				Color:    color.Black,
+				IsInline: false,
+			})
+		}
 	}
 
 	cc.output.Segments = segments
 	cc.output.Refresh()
 }
-
 func main() {
 	a := app.New()
 	w := a.NewWindow("Go语言记牌器")
@@ -222,7 +295,6 @@ func main() {
 	cc := NewCardCounter()
 	cc.output = widget.NewRichText()
 	cc.output.Wrapping = fyne.TextWrapWord
-	//cc.output.TextStyle = fyne.TextStyle{Size: 18, Bold: true}
 	cc.updateOutput("欢迎使用记牌器！\n输入初始牌后点击初始化，然后输入当前牌点击提交。")
 
 	cc.input = widget.NewEntry()
