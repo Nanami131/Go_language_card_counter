@@ -275,7 +275,6 @@ func (cc *CardCounter) updateOutput(text string) {
 				IsInline: false,
 			})
 		} else {
-
 			segments = append(segments, &CustomTextSegment{
 				Text:     line,
 				Color:    color.Black,
@@ -287,6 +286,18 @@ func (cc *CardCounter) updateOutput(text string) {
 	cc.output.Segments = segments
 	cc.output.Refresh()
 }
+
+func (cc *CardCounter) Reset() {
+	for i := range cc.cards {
+		for j := range cc.cards[i] {
+			cc.cards[i][j] = -1
+		}
+	}
+	cc.nums1 = make([]string, 0)
+	cc.nums2 = make([]string, 0)
+	cc.updateOutput("欢迎使用记牌器！\n输入初始牌后点击初始化，然后输入当前牌点击提交。")
+}
+
 func main() {
 	a := app.New()
 	w := a.NewWindow("Go语言记牌器")
@@ -299,8 +310,25 @@ func main() {
 
 	cc.input = widget.NewEntry()
 	cc.input.SetPlaceHolder("输入牌，如 A3 或 D5 或 3-5")
+	// 支持回车提交行牌
+	cc.input.OnSubmitted = func(text string) {
+		if text != "" {
+			result := cc.updateCards(text)
+			cc.updateOutput(result)
+			cc.input.SetText("")
+		}
+	}
+
 	cc.zeroCard = widget.NewEntry()
 	cc.zeroCard.SetPlaceHolder("输入初始已出牌，如 345")
+	// 支持回车提交初始化
+	cc.zeroCard.OnSubmitted = func(text string) {
+		if text != "" {
+			cc.initCards(text)
+			cc.updateOutput(cc.display())
+			cc.zeroCard.SetText("")
+		}
+	}
 
 	submitBtn := widget.NewButton("提交", func() {
 		if cc.input.Text != "" {
@@ -325,6 +353,22 @@ func main() {
 		widget.NewLabel("输入当前出牌："),
 		cc.input,
 		submitBtn,
+	)
+
+	resetBtn := widget.NewButton("重置", func() {
+		cc.Reset()
+		cc.input.SetText("")
+		cc.zeroCard.SetText("")
+	})
+
+	inputArea = container.NewVBox(
+		widget.NewLabel("初始已出牌："),
+		cc.zeroCard,
+		initBtn,
+		widget.NewLabel("输入当前出牌："),
+		cc.input,
+		submitBtn,
+		resetBtn,
 	)
 
 	content := container.NewBorder(
